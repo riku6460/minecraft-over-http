@@ -5,28 +5,32 @@ declare interface Config {
 
 const config: Config = require('./config.json');
 
-const io = require('socket.io')(3000);
+const http = require('http').createServer().listen(3000);
+const WebSocketServer = require('websocket').server;
+const server = new WebSocketServer({httpServer: http});
 const net = require('net');
 
 process.on('uncaughtException', console.error);
 
-io.on('connection', socket => {
+server.on('request', request => {
 
-  const connection = new net.Socket().connect(config.port, config.host);
-  const addr = socket.handshake.headers['x-real-ip'] || socket.conn.remoteAddress.split(':')[3];
-  connection.write(`PROXY TCP4 ${addr} 127.0.0.1 25565 25565\r\n`);
+  const wsConnection = request.accept(null, request.origin);
 
-  connection.on('close', () => socket.disconnect());
-  socket.on('disconnect', () => connection.end());
+  const mcConnection = new net.Socket().connect(config.port, config.host);
+  const addr = request.httpRequest.headers['x-real-ip'] || request.remoteAddress.split(':')[3];
+  mcConnection.write(`PROXY TCP4 ${addr} 127.0.0.1 25565 25565\r\n`);
 
-  connection.on('data', data => socket.emit('msg', data));
+  mcConnection.on('close', () => wsConnection.close());
+  wsConnection.on('close', () => mcConnection.end());
 
-  socket.on('msg', data => {
-    if (data instanceof Buffer) {
-      connection.write(data);
+  mcConnection.on('data', data => wsConnection.send(data));
+
+  wsConnection.on('message', data => {
+    if (data.type === 'binary' && data.binaryData instanceof Buffer) {
+      mcConnection.write(data.binaryData);
     } else {
-      socket.disconnect();
-      connection.end();
+      wsConnection.close();
+      mcConnection.end();
     }
   });
 
