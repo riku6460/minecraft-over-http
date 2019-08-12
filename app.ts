@@ -19,7 +19,6 @@ server.on('request', request => {
   const mcConnection = new net.Socket().connect(config.port, config.host);
   const addr = request.remoteAddress.startsWith('::ffff:') ? request.remoteAddress.split(':')[3] : request.remoteAddress;
   const v4 = addr.indexOf(':') === -1;
-  console.log(request.remoteAddress);
   mcConnection.write(`PROXY TCP${v4 ? 4 : 6} ${addr} ${v4 ? '127.0.0.1' : '::1'} 25565 25565\r\n`);
 
   mcConnection.on('close', () => wsConnection.close());
